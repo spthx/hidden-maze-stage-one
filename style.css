@@ -277,9 +277,13 @@ h1 {
 .wall-chip { background: #4b5a54; }
 
 .message-panel {
-  display: flex; min-height: 37px; align-items: center; padding: 6px 9px;
-  border: 1px solid rgba(111,160,143,.16); background: rgba(5,16,13,.76);
+  position: absolute; z-index: 7; top: 50%; left: 50%; display: flex;
+  width: min(86%,360px); min-height: 48px; align-items: center; padding: 9px 12px;
+  border: 1px solid rgba(111,160,143,.38); background: rgba(3,12,10,.92);
+  box-shadow: 0 10px 30px rgba(0,0,0,.58),inset 0 0 18px rgba(120,240,189,.04);
+  pointer-events: none; opacity: 0; transform: translate(-50%,-50%);
 }
+.message-panel.message-replay { animation: messageToast 2.2s ease both; }
 .message-panel[data-tone="danger"] { border-color: rgba(242,126,113,.4); }
 .message-panel[data-tone="attention"] { border-color: rgba(245,201,111,.45); }
 .message-pulse {
@@ -288,7 +292,7 @@ h1 {
 }
 .message-panel[data-tone="danger"] .message-pulse { background: var(--red); box-shadow: 0 0 8px var(--red); }
 .message-panel[data-tone="attention"] .message-pulse { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
-.message-panel p { margin: 0; color: #aec2ba; font-size: .67rem; }
+.message-panel p { margin: 0; color: #d5e4de; font-size: clamp(.67rem,2.7vw,.79rem); line-height: 1.5; text-align: left; }
 .action-bar { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 6px; margin: 6px 0; }
 .action-button {
   min-width: 0; min-height: 44px; padding: 5px 4px;
@@ -357,6 +361,11 @@ h1 {
   50% { box-shadow: 0 0 0 8px rgba(120,240,189,.04),0 0 25px var(--green); }
 }
 @keyframes targetPulse { to { box-shadow: inset 0 0 15px rgba(245,201,111,.42); } }
+@keyframes messageToast {
+  0% { opacity: 0; transform: translate(-50%,calc(-50% + 8px)) scale(.98); }
+  10%,72% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%,calc(-50% - 6px)) scale(.99); }
+}
 @keyframes boardHit {
   20% { transform: translateX(-4px); }
   50% { transform: translateX(4px); }
@@ -371,6 +380,7 @@ h1 {
   .utility-bar p { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .message-panel.message-replay { animation: none !important; opacity: 1; }
   *,*::before,*::after {
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;

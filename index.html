@@ -74,6 +74,10 @@
         <div class="board-frame" id="board-frame">
           <div id="maze-grid" class="maze-grid" role="grid" aria-label="自動生成された暗闇の迷宮"></div>
           <div class="board-noise" aria-hidden="true"></div>
+          <section id="message-panel" class="message-panel" aria-live="polite" aria-atomic="true">
+            <span class="message-pulse" aria-hidden="true"></span>
+            <p id="event-message">開始ダイスが運命を決めた。宝箱は冒険者より先に取れ。</p>
+          </section>
         </div>
         <div class="legend" aria-label="盤面の凡例">
           <span><i class="legend-chip presence-chip"></i>気配</span>
@@ -84,10 +88,6 @@
         </div>
       </section>
 
-      <section id="message-panel" class="message-panel" aria-live="polite" aria-atomic="true">
-        <span class="message-pulse" aria-hidden="true"></span>
-        <p id="event-message">開始ダイスが運命を決めた。宝箱は冒険者より先に取れ。</p>
-      </section>
 
       <section class="action-bar" aria-label="装備と探索道具">
         <button id="attack-button" class="action-button attack-action" disabled>

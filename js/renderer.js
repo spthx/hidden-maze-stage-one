@@ -225,6 +225,9 @@ export class Renderer {
     const copy = getEventCopy(game.lastEvent);
     this.eventMessage.textContent = copy.text;
     this.messagePanel.dataset.tone = copy.tone;
+    this.messagePanel.classList.remove("message-replay");
+    void this.messagePanel.offsetWidth;
+    this.messagePanel.classList.add("message-replay");
   }
 
   renderPanels(game, stageIndex, targeting) {
