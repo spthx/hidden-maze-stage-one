@@ -1,0 +1,22 @@
+export const prototypeStage = {
+  id: 1,
+  name: "二重隔壁",
+  width: 6,
+  height: 6,
+  moveLimit: 20,
+  start: { x: 0, y: 5 },
+  exit: { x: 4, y: 0 },
+  walls: [
+    { x: 0, y: 4 },
+    { x: 1, y: 4 },
+    { x: 3, y: 4 },
+    { x: 4, y: 4 },
+    { x: 5, y: 4 },
+    { x: 1, y: 2 },
+    { x: 2, y: 2 },
+    { x: 3, y: 2 },
+    { x: 4, y: 2 },
+    { x: 5, y: 2 },
+    { x: 5, y: 1 },
+  ],
+};
