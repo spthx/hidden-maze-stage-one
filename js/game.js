@@ -63,6 +63,23 @@ export class MazeGame {
     return this.weapon && this.weaponUses > 0 ? WEAPONS[this.weapon] : null;
   }
 
+  get canDefeatBoss() {
+    return (
+      this.hasSilverSword ||
+      (this.weapon === "sword" && this.weaponUses > 0)
+    );
+  }
+
+  defeatBoss() {
+    if (!this.canDefeatBoss) return false;
+    if (this.hasSilverSword) this.hasSilverSword = false;
+    else this.weaponUses -= 1;
+    this.defeatedMonsters.add(this.stage.boss.id);
+    this.attackCount += 1;
+    this.state = GameState.CLEAR;
+    return true;
+  }
+
   get mapPercentage() {
     return Math.round((this.mappedCells.size / (this.stage.width * this.stage.height)) * 100);
   }
@@ -180,8 +197,11 @@ export class MazeGame {
     );
     if (targetEntity?.kind === "boss") {
       this.knownIdentities.add(targetEntity.id);
-      this.hp -= 2;
       this.moveCount += 1;
+      if (this.defeatBoss()) {
+        return this.remember({ type: "bossStrike", contactAttack: true });
+      }
+      this.hp -= 2;
       const event = this.finishIfDead({ type: "bossRepels", damage: 2 });
       if (!this.isFinished) this.advanceWorld();
       return this.remember(event);
@@ -261,7 +281,7 @@ export class MazeGame {
       if (
         enemy.kind === "boss" &&
         enemyDistance === 1 &&
-        (this.hasSilverSword || this.weapon === "sword")
+        this.canDefeatBoss
       ) {
         return true;
       }
@@ -283,14 +303,11 @@ export class MazeGame {
     const bossFinisher =
       target.kind === "boss" &&
       distance(target, this.player) === 1 &&
-      (this.hasSilverSword || this.weapon === "sword");
+      this.canDefeatBoss;
 
     this.attackCount += 1;
     if (bossFinisher) {
-      if (this.hasSilverSword) this.hasSilverSword = false;
-      else this.weaponUses -= 1;
-      this.defeatedMonsters.add(target.id);
-      this.state = GameState.CLEAR;
+      this.defeatBoss();
       return this.remember({ type: "bossStrike" });
     }
 

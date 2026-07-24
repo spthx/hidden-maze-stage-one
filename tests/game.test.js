@@ -141,6 +141,34 @@ test("a sword or silver sword must finish the boss from an adjacent cell", () =>
   assert.equal(game.state, "clear");
 });
 
+test("walking into the boss wins when carrying a valid boss weapon", () => {
+  const stage = createTestStage({
+    start: { x: 3, y: 4 },
+    adventurer: { id: "adventurer", x: 0, y: 0, loot: [] },
+  });
+  const game = new MazeGame(stage);
+  game.start();
+  game.hasSilverSword = true;
+  const event = game.move("right");
+  assert.equal(event.type, "bossStrike");
+  assert.equal(game.state, "clear");
+  assert.equal(game.attackCount, 1);
+});
+
+test("a depleted ordinary sword cannot defeat the boss", () => {
+  const stage = createTestStage({
+    start: { x: 3, y: 4 },
+    adventurer: { id: "adventurer", x: 0, y: 0, loot: [] },
+  });
+  const game = new MazeGame(stage);
+  game.start();
+  game.weapon = "sword";
+  game.weaponUses = 0;
+  const event = game.move("right");
+  assert.equal(event.type, "bossRepels");
+  assert.equal(game.state, "playing");
+});
+
 test("spear is adjacent-capable while bow is not", () => {
   const stage = createTestStage({
     start: { x: 0, y: 2 },
