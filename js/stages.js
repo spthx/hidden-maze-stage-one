@@ -2,16 +2,14 @@ export const WEAPONS = Object.freeze({
   sword: {
     id: "sword",
     name: "剣",
-    mark: "剣",
     rangeMin: 1,
     rangeMax: 1,
     uses: 3,
-    description: "隣接する敵を先制攻撃",
+    description: "隣接する相手へ先制攻撃",
   },
   spear: {
     id: "spear",
     name: "ヤリ",
-    mark: "槍",
     rangeMin: 1,
     rangeMax: 2,
     uses: 2,
@@ -20,11 +18,10 @@ export const WEAPONS = Object.freeze({
   bow: {
     id: "bow",
     name: "弓",
-    mark: "弓",
     rangeMin: 2,
     rangeMax: 4,
     uses: 2,
-    description: "離れた敵を遠距離攻撃",
+    description: "隣接不可・直線4マスまで先制攻撃",
   },
 });
 
@@ -34,46 +31,49 @@ export const STAGE_CONFIGS = Object.freeze([
     name: "石壁の入口",
     size: 5,
     hp: 5,
-    wallDensity: 0.14,
-    minimumBossDistance: 7,
-    fieldMonsters: 1,
-    traps: 0,
-    chestContents: [{ type: "weapon", weaponId: "sword" }],
+    wallDensity: 0.1,
+    minimumBossDistance: 6,
+    weaponId: "sword",
+    extraChests: [],
     torches: 1,
     lights: 0,
   },
   {
     id: 2,
-    name: "二重の回廊",
+    name: "競争者の回廊",
     size: 6,
     hp: 5,
-    wallDensity: 0.18,
-    minimumBossDistance: 9,
-    fieldMonsters: 2,
-    traps: 1,
-    chestContents: [
-      { type: "weapon", weaponId: "spear" },
-      { type: "companion" },
-    ],
+    wallDensity: 0.13,
+    minimumBossDistance: 8,
+    weaponId: "spear",
+    extraChests: [{ type: "silverSword" }],
     torches: 1,
     lights: 1,
   },
   {
     id: 3,
-    name: "遠見の大迷宮",
-    size: 8,
+    name: "追跡者の迷宮",
+    size: 7,
     hp: 6,
-    wallDensity: 0.21,
-    minimumBossDistance: 12,
-    fieldMonsters: 1,
-    traps: 2,
-    chestContents: [
-      { type: "weapon", weaponId: "bow" },
-      { type: "companion" },
-      { type: "mimic" },
-    ],
+    wallDensity: 0.16,
+    minimumBossDistance: 10,
+    weaponId: "bow",
+    extraChests: [{ type: "silverSword" }, { type: "herb" }],
     torches: 1,
     lights: 1,
+  },
+  {
+    id: 4,
+    name: "転移の深層",
+    size: 8,
+    hp: 6,
+    wallDensity: 0.18,
+    minimumBossDistance: 11,
+    weaponId: "bow",
+    extraChests: [{ type: "silverSword" }, { type: "torch" }],
+    torches: 1,
+    lights: 1,
+    hiddenRoom: true,
   },
 ]);
 
@@ -101,6 +101,23 @@ function shuffle(values, random) {
   return result;
 }
 
+function roomGeometry(size) {
+  return {
+    roomCells: [
+      { x: size - 2, y: 0 },
+      { x: size - 1, y: 0 },
+      { x: size - 2, y: 1 },
+      { x: size - 1, y: 1 },
+    ],
+    sealWalls: [
+      { x: size - 3, y: 0 },
+      { x: size - 3, y: 1 },
+      { x: size - 2, y: 2 },
+      { x: size - 1, y: 2 },
+    ],
+  };
+}
+
 function getReachable(size, walls, start) {
   const wallKeys = new Set(walls.map(key));
   const queue = [{ ...start }];
@@ -116,7 +133,6 @@ function getReachable(size, walls, start) {
   while (queue.length > 0) {
     const current = queue.shift();
     const currentDistance = distance.get(key(current));
-
     for (const offset of offsets) {
       const next = { x: current.x + offset.x, y: current.y + offset.y };
       const nextKey = key(next);
@@ -135,49 +151,49 @@ function getReachable(size, walls, start) {
       queue.push(next);
     }
   }
-
   return { distance, positions };
 }
 
 function pickGeneratedLayout(config, random) {
   const size = config.size;
   const start = { x: 0, y: size - 1 };
-  const protectedKeys = new Set([
+  const hidden = config.hiddenRoom ? roomGeometry(size) : null;
+  const fixedWalls = hidden?.sealWalls ?? [];
+  const forbiddenKeys = new Set([
     key(start),
     key({ x: 1, y: size - 1 }),
     key({ x: 0, y: size - 2 }),
+    ...fixedWalls.map(key),
+    ...(hidden?.roomCells ?? []).map(key),
   ]);
 
-  for (let attempt = 0; attempt < 400; attempt += 1) {
-    const walls = [];
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    const walls = [...fixedWalls];
     for (let y = 0; y < size; y += 1) {
       for (let x = 0; x < size; x += 1) {
         const position = { x, y };
-        if (!protectedKeys.has(key(position)) && random() < config.wallDensity) {
+        if (!forbiddenKeys.has(key(position)) && random() < config.wallDensity) {
           walls.push(position);
         }
       }
     }
 
     const reachable = getReachable(size, walls, start);
-    const minimumFloorCount = Math.floor(size * size * 0.68);
-    if (reachable.positions.size < minimumFloorCount) continue;
+    const playableCells = size * size - (hidden ? 8 : 0);
+    if (reachable.positions.size < Math.floor(playableCells * 0.68)) continue;
 
     const farCells = [...reachable.positions.entries()]
-      .filter(([, position]) => key(position) !== key(start))
+      .filter(([positionKey]) => positionKey !== key(start))
       .map(([positionKey, position]) => ({
         ...position,
         distance: reachable.distance.get(positionKey),
       }))
       .filter((position) => position.distance >= config.minimumBossDistance)
       .sort((a, b) => b.distance - a.distance);
-
     if (farCells.length === 0) continue;
-    const bossPool = farCells.slice(0, Math.max(1, Math.ceil(farCells.length / 3)));
-    const boss = bossPool[Math.floor(random() * bossPool.length)];
 
-    const requiredCells =
-      config.fieldMonsters + config.traps + config.chestContents.length;
+    const bossPoolSize = Math.max(1, Math.ceil(farCells.length / 3));
+    const boss = farCells[Math.floor(random() * bossPoolSize)];
     const available = shuffle(
       [...reachable.positions.values()].filter((position) => {
         const distance = reachable.distance.get(key(position));
@@ -185,11 +201,16 @@ function pickGeneratedLayout(config, random) {
       }),
       random,
     );
-
-    if (available.length < requiredCells) continue;
-    return { start, boss: { x: boss.x, y: boss.y }, walls, available };
+    const needed = 3 + config.extraChests.length + (hidden ? 1 : 0);
+    if (available.length < needed) continue;
+    return {
+      start,
+      boss: { x: boss.x, y: boss.y },
+      walls,
+      available,
+      hidden,
+    };
   }
-
   throw new Error(`ステージ${config.id}の自動生成に失敗しました。`);
 }
 
@@ -200,22 +221,42 @@ export function generateStage(config, seed = Date.now()) {
   const positions = [...layout.available];
   const takePosition = () => positions.shift();
 
-  const monsters = Array.from({ length: config.fieldMonsters }, (_, index) => ({
-    id: `monster-${index + 1}`,
-    ...takePosition(),
-  }));
-
-  const shuffledContents = shuffle(config.chestContents, random);
-  const chests = shuffledContents.map((content, index) => ({
+  const monsters = [{ id: "monster-1", ...takePosition() }];
+  const adventurer = { id: "adventurer", ...takePosition(), loot: [] };
+  const contents = shuffle(
+    [{ type: "weapon", weaponId: config.weaponId }, ...config.extraChests],
+    random,
+  );
+  const chests = contents.map((content, index) => ({
     id: `chest-${index + 1}`,
     ...takePosition(),
     content: { ...content },
   }));
 
-  const traps = Array.from({ length: config.traps }, (_, index) => ({
-    id: `trap-${index + 1}`,
-    ...takePosition(),
-  }));
+  let warp = null;
+  if (layout.hidden) {
+    const roomType = random() < 0.5 ? "treasure" : "monsterHouse";
+    warp = {
+      entry: takePosition(),
+      exit: layout.hidden.roomCells[2],
+      roomCells: layout.hidden.roomCells,
+      type: roomType,
+    };
+    if (roomType === "treasure") {
+      chests.push({
+        id: "hidden-chest",
+        ...layout.hidden.roomCells[1],
+        content: { type: random() < 0.5 ? "herb" : "light" },
+        hiddenRoom: true,
+      });
+    } else {
+      monsters.push({
+        id: "room-monster",
+        ...layout.hidden.roomCells[1],
+        hiddenRoom: true,
+      });
+    }
+  }
 
   return {
     id: config.id,
@@ -228,14 +269,16 @@ export function generateStage(config, seed = Date.now()) {
     boss: { id: "boss", ...layout.boss },
     walls: layout.walls,
     monsters,
+    adventurer,
     chests,
-    traps,
+    traps: [],
+    warp,
     torches: config.torches,
     lights: config.lights,
+    startRoll: (normalizedSeed % 6) + 1,
   };
 }
 
 export function countStageThreats(stage) {
-  const mimicCount = stage.chests.filter((chest) => chest.content.type === "mimic").length;
-  return 1 + stage.monsters.length + mimicCount;
+  return 1 + stage.monsters.length;
 }

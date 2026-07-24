@@ -15,7 +15,7 @@ export function createWallSet(stage) {
   return new Set(stage.walls.map(cellKey));
 }
 
-export function findShortestPath(stage, start, goal) {
+export function findShortestPath(stage, start, goal, blocked = new Set()) {
   const wallSet = createWallSet(stage);
   const startKey = cellKey(start);
   const goalKey = cellKey(goal);
@@ -48,6 +48,7 @@ export function findShortestPath(stage, start, goal) {
       if (
         isInside(stage, next) &&
         !wallSet.has(nextKey) &&
+        (!blocked.has(nextKey) || nextKey === goalKey) &&
         !previous.has(nextKey)
       ) {
         previous.set(nextKey, currentKey);
@@ -55,7 +56,6 @@ export function findShortestPath(stage, start, goal) {
       }
     }
   }
-
   return null;
 }
 
@@ -68,7 +68,6 @@ function linePoints(from, to) {
   const sx = from.x < to.x ? 1 : -1;
   const sy = from.y < to.y ? 1 : -1;
   let error = dx - dy;
-
   while (x !== to.x || y !== to.y) {
     const twiceError = error * 2;
     if (twiceError > -dy) {
@@ -81,7 +80,6 @@ function linePoints(from, to) {
     }
     points.push({ x, y });
   }
-
   return points;
 }
 
@@ -89,13 +87,9 @@ export function hasLineOfSight(stage, from, to) {
   if (!isInside(stage, to)) return false;
   const wallSet = createWallSet(stage);
   const points = linePoints(from, to);
-
   for (let index = 0; index < points.length; index += 1) {
-    const point = points[index];
-    const isTarget = index === points.length - 1;
-    if (wallSet.has(cellKey(point)) && !isTarget) return false;
+    if (wallSet.has(cellKey(points[index])) && index < points.length - 1) return false;
   }
-
   return true;
 }
 
@@ -120,19 +114,16 @@ export function hasClearOrthogonalLine(stage, from, to, blockers = new Set()) {
   if (from.x !== to.x && from.y !== to.y) return false;
   const distance = Math.abs(from.x - to.x) + Math.abs(from.y - to.y);
   if (distance === 0) return false;
-
   const step = {
     x: Math.sign(to.x - from.x),
     y: Math.sign(to.y - from.y),
   };
   const wallSet = createWallSet(stage);
   let cursor = { x: from.x + step.x, y: from.y + step.y };
-
   while (cursor.x !== to.x || cursor.y !== to.y) {
     const cursorKey = cellKey(cursor);
     if (wallSet.has(cursorKey) || blockers.has(cursorKey)) return false;
     cursor = { x: cursor.x + step.x, y: cursor.y + step.y };
   }
-
   return true;
 }

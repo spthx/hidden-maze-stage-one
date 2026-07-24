@@ -27,18 +27,17 @@ class GameSound {
   }
 
   play(event) {
-    if (event.type === "bossStrike" || event.type === "fistBoss") {
+    if (event.type === "bossStrike") {
       [392, 523, 659].forEach((frequency, index) =>
         this.tone(frequency, 0.18, index * 0.09),
       );
     } else if (
-      ["wall", "fistMonster", "trap", "mimic", "gameOver"].includes(event.type)
+      ["wall", "bossRepels", "monsterHitPlayer", "gameOver"].includes(event.type)
     ) {
       this.tone(105, 0.13, 0, "square");
     } else if (
-      ["weaponStrike", "weaponFound", "companionFound", "torch", "light"].includes(
-        event.type,
-      )
+      ["weaponStrike", "weaponFound", "silverSwordFound", "torch", "light", "warpIn"]
+        .includes(event.type)
     ) {
       this.tone(510, 0.09);
     } else {
@@ -82,25 +81,17 @@ function move(direction) {
 document.querySelectorAll("[data-direction]").forEach((button) => {
   button.addEventListener("click", () => move(button.dataset.direction));
 });
-
 document.querySelectorAll("[data-stage-index]").forEach((button) => {
-  button.addEventListener("click", () => {
-    loadStage(Number(button.dataset.stageIndex));
-  });
+  button.addEventListener("click", () => loadStage(Number(button.dataset.stageIndex)));
 });
 
 document.querySelector("#attack-button").addEventListener("click", () => {
-  if (!game.activeWeapon) return;
   const targets = game.getAttackableEnemies();
   if (targets.length === 0) {
     game.lastEvent = { type: "noTarget" };
     targeting = false;
   } else {
     targeting = !targeting;
-    game.lastEvent = {
-      type: targeting ? "weaponFound" : "start",
-      weaponId: game.weapon,
-    };
   }
   render();
 });
@@ -110,52 +101,26 @@ document.querySelector("#maze-grid").addEventListener("click", (event) => {
   if (!target || !targeting) return;
   runAction(() => game.attack(target.dataset.targetKey));
 });
-
-document
-  .querySelector("#torch-button")
-  .addEventListener("click", () => runAction(() => game.useTorch()));
-document
-  .querySelector("#light-button")
-  .addEventListener("click", () => runAction(() => game.useLight()));
-document
-  .querySelector("#open-chest-button")
-  .addEventListener("click", () => runAction(() => game.openChest()));
-document
-  .querySelector("#leave-chest-button")
-  .addEventListener("click", () => runAction(() => game.leaveChest()));
-
-document.querySelector("#restart-button").addEventListener("click", () => {
-  loadStage(stageIndex, currentSeed);
-});
-document.querySelector("#retry-button").addEventListener("click", () => {
-  loadStage(stageIndex, currentSeed);
-});
-document.querySelector("#new-maze-button").addEventListener("click", () => {
-  loadStage(stageIndex);
-});
+document.querySelector("#torch-button").addEventListener("click", () => runAction(() => game.useTorch()));
+document.querySelector("#light-button").addEventListener("click", () => runAction(() => game.useLight()));
+document.querySelector("#open-chest-button").addEventListener("click", () => runAction(() => game.openChest()));
+document.querySelector("#leave-chest-button").addEventListener("click", () => runAction(() => game.leaveChest()));
+document.querySelector("#restart-button").addEventListener("click", () => loadStage(stageIndex, currentSeed));
+document.querySelector("#retry-button").addEventListener("click", () => loadStage(stageIndex, currentSeed));
+document.querySelector("#new-maze-button").addEventListener("click", () => loadStage(stageIndex));
 document.querySelector("#next-stage-button").addEventListener("click", () => {
-  const nextIndex =
-    game.state === "clear" && stageIndex < STAGE_CONFIGS.length - 1
-      ? stageIndex + 1
-      : 0;
+  const nextIndex = game.state === "clear" && stageIndex < STAGE_CONFIGS.length - 1
+    ? stageIndex + 1
+    : 0;
   loadStage(nextIndex);
 });
 
 const KEY_DIRECTIONS = {
-  ArrowUp: "up",
-  w: "up",
-  W: "up",
-  ArrowRight: "right",
-  d: "right",
-  D: "right",
-  ArrowDown: "down",
-  s: "down",
-  S: "down",
-  ArrowLeft: "left",
-  a: "left",
-  A: "left",
+  ArrowUp: "up", w: "up", W: "up",
+  ArrowRight: "right", d: "right", D: "right",
+  ArrowDown: "down", s: "down", S: "down",
+  ArrowLeft: "left", a: "left", A: "left",
 };
-
 window.addEventListener("keydown", (event) => {
   if (event.repeat) return;
   const direction = KEY_DIRECTIONS[event.key];
