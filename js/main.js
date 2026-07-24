@@ -1,38 +1,24 @@
 import { MazeGame } from "./game.js";
 import { Renderer } from "./renderer.js";
-import { prototypeStage } from "./stages.js";
+import { generateStage, STAGE_CONFIGS } from "./stages.js";
 
 class GameSound {
   constructor() {
     this.context = null;
-    this.muted = false;
   }
 
-  toggle() {
-    this.muted = !this.muted;
-    return this.muted;
-  }
-
-  ensureContext() {
-    if (!this.context) {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (AudioContext) this.context = new AudioContext();
-    }
-    if (this.context?.state === "suspended") this.context.resume();
-  }
-
-  tone(frequency, duration = 0.08, delay = 0, type = "sine", volume = 0.035) {
-    if (this.muted) return;
-    this.ensureContext();
-    if (!this.context) return;
-
+  tone(frequency, duration = 0.08, delay = 0, type = "triangle") {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    if (!this.context) this.context = new AudioContext();
+    if (this.context.state === "suspended") this.context.resume();
     const start = this.context.currentTime + delay;
     const oscillator = this.context.createOscillator();
     const gain = this.context.createGain();
     oscillator.type = type;
-    oscillator.frequency.setValueAtTime(frequency, start);
+    oscillator.frequency.value = frequency;
     gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(volume, start + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.035, start + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
     oscillator.connect(gain);
     gain.connect(this.context.destination);
@@ -41,66 +27,118 @@ class GameSound {
   }
 
   play(event) {
-    if (event.type === "clear") {
-      [392, 523, 659, 784].forEach((frequency, index) => {
-        this.tone(frequency, 0.18, index * 0.09, "triangle", 0.045);
-      });
-      return;
-    }
-
-    if (event.type === "gameOver") {
-      [196, 165, 131].forEach((frequency, index) => {
-        this.tone(frequency, 0.2, index * 0.12, "sawtooth", 0.025);
-      });
-      return;
-    }
-
-    if (event.type === "wall" || event.type === "boundary") {
-      this.tone(92, 0.12, 0, "square", 0.025);
-      return;
-    }
-
-    if (event.distanceDelta < 0) {
-      this.tone(520, 0.07, 0, "triangle");
-    } else if (event.distanceDelta > 0) {
-      this.tone(240, 0.09, 0, "triangle");
+    if (event.type === "bossStrike" || event.type === "fistBoss") {
+      [392, 523, 659].forEach((frequency, index) =>
+        this.tone(frequency, 0.18, index * 0.09),
+      );
+    } else if (
+      ["wall", "fistMonster", "trap", "mimic", "gameOver"].includes(event.type)
+    ) {
+      this.tone(105, 0.13, 0, "square");
+    } else if (
+      ["weaponStrike", "weaponFound", "companionFound", "torch", "light"].includes(
+        event.type,
+      )
+    ) {
+      this.tone(510, 0.09);
     } else {
-      this.tone(350, 0.06, 0, "triangle", 0.02);
+      this.tone(290, 0.045);
     }
   }
 }
 
-const game = new MazeGame(prototypeStage);
 const renderer = new Renderer();
 const sound = new GameSound();
-const soundButton = document.querySelector("#sound-button");
+let stageIndex = 0;
+let currentSeed = Date.now() >>> 0;
+let game = new MazeGame(generateStage(STAGE_CONFIGS[stageIndex], currentSeed));
+let targeting = false;
 
-function move(direction) {
-  const event = game.move(direction);
-  if (event.type === "ignored") return;
-  renderer.render(game);
+function render() {
+  renderer.render(game, stageIndex, targeting);
+}
+
+function runAction(action) {
+  const event = action();
+  if (!event || event.type === "ignored") return;
+  targeting = false;
+  render();
   renderer.animate(event);
   sound.play(event);
 }
 
-function restart() {
-  game.reset();
-  renderer.render(game);
-  sound.tone(330, 0.06, 0, "triangle", 0.02);
+function loadStage(index, seed = Date.now()) {
+  stageIndex = index;
+  currentSeed = Number(seed) >>> 0;
+  game = new MazeGame(generateStage(STAGE_CONFIGS[stageIndex], currentSeed));
+  targeting = false;
+  render();
+}
+
+function move(direction) {
+  runAction(() => game.move(direction));
 }
 
 document.querySelectorAll("[data-direction]").forEach((button) => {
   button.addEventListener("click", () => move(button.dataset.direction));
 });
 
-document.querySelector("#restart-button").addEventListener("click", restart);
-document.querySelector("#retry-button").addEventListener("click", restart);
+document.querySelectorAll("[data-stage-index]").forEach((button) => {
+  button.addEventListener("click", () => {
+    loadStage(Number(button.dataset.stageIndex));
+  });
+});
 
-soundButton.addEventListener("click", () => {
-  const muted = sound.toggle();
-  soundButton.textContent = muted ? "◎ サウンド OFF" : "◉ サウンド ON";
-  soundButton.setAttribute("aria-pressed", String(muted));
-  if (!muted) sound.tone(440, 0.07, 0, "triangle", 0.025);
+document.querySelector("#attack-button").addEventListener("click", () => {
+  if (!game.activeWeapon) return;
+  const targets = game.getAttackableEnemies();
+  if (targets.length === 0) {
+    game.lastEvent = { type: "noTarget" };
+    targeting = false;
+  } else {
+    targeting = !targeting;
+    game.lastEvent = {
+      type: targeting ? "weaponFound" : "start",
+      weaponId: game.weapon,
+    };
+  }
+  render();
+});
+
+document.querySelector("#maze-grid").addEventListener("click", (event) => {
+  const target = event.target.closest("[data-target-key]");
+  if (!target || !targeting) return;
+  runAction(() => game.attack(target.dataset.targetKey));
+});
+
+document
+  .querySelector("#torch-button")
+  .addEventListener("click", () => runAction(() => game.useTorch()));
+document
+  .querySelector("#light-button")
+  .addEventListener("click", () => runAction(() => game.useLight()));
+document
+  .querySelector("#open-chest-button")
+  .addEventListener("click", () => runAction(() => game.openChest()));
+document
+  .querySelector("#leave-chest-button")
+  .addEventListener("click", () => runAction(() => game.leaveChest()));
+
+document.querySelector("#restart-button").addEventListener("click", () => {
+  loadStage(stageIndex, currentSeed);
+});
+document.querySelector("#retry-button").addEventListener("click", () => {
+  loadStage(stageIndex, currentSeed);
+});
+document.querySelector("#new-maze-button").addEventListener("click", () => {
+  loadStage(stageIndex);
+});
+document.querySelector("#next-stage-button").addEventListener("click", () => {
+  const nextIndex =
+    game.state === "clear" && stageIndex < STAGE_CONFIGS.length - 1
+      ? stageIndex + 1
+      : 0;
+  loadStage(nextIndex);
 });
 
 const KEY_DIRECTIONS = {
@@ -119,10 +157,21 @@ const KEY_DIRECTIONS = {
 };
 
 window.addEventListener("keydown", (event) => {
+  if (event.repeat) return;
   const direction = KEY_DIRECTIONS[event.key];
-  if (!direction || event.repeat) return;
-  event.preventDefault();
-  move(direction);
+  if (direction) {
+    event.preventDefault();
+    move(direction);
+  } else if (event.key === "f" || event.key === "F") {
+    document.querySelector("#attack-button").click();
+  } else if (event.key === "t" || event.key === "T") {
+    document.querySelector("#torch-button").click();
+  } else if (event.key === "l" || event.key === "L") {
+    document.querySelector("#light-button").click();
+  } else if (event.key === "Escape" && targeting) {
+    targeting = false;
+    render();
+  }
 });
 
-renderer.render(game);
+render();
