@@ -240,22 +240,39 @@ h1 {
 .player-marker {
   position: relative;
   z-index: 5;
-  width: 100%;
-  height: 100%;
-  background-image: url("./public/hero-walk-sheet.png");
-  background-repeat: no-repeat;
-  background-size: 400% 200%;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 0 3px rgba(120,240,189,.72));
+  width: min(78%,34px);
+  height: min(84%,38px);
+  color: var(--green);
+  filter: drop-shadow(0 0 4px rgba(120,240,189,.72));
 }
-.player-marker.facing-down { background-position: 0% 0%; }
-.player-marker.facing-right { background-position: 33.333% 0%; }
-.player-marker.facing-up { background-position: 66.667% 0%; }
-.player-marker.facing-left { background-position: 100% 0%; }
-.player-marker.walking.facing-down { animation: walkDown .34s steps(1,end) 2; }
-.player-marker.walking.facing-right { animation: walkRight .34s steps(1,end) 2; }
-.player-marker.walking.facing-up { animation: walkUp .34s steps(1,end) 2; }
-.player-marker.walking.facing-left { animation: walkLeft .34s steps(1,end) 2; }
+.player-marker::before {
+  position: absolute;
+  top: 4px;
+  left: calc(50% - 13px);
+  width: 2px;
+  height: 2px;
+  content: "";
+  background: transparent;
+  box-shadow:
+    10px 0 currentColor,12px 0 currentColor,
+    8px 2px currentColor,10px 2px currentColor,12px 2px currentColor,14px 2px currentColor,
+    6px 4px currentColor,8px 4px currentColor,10px 4px currentColor,12px 4px currentColor,14px 4px currentColor,16px 4px currentColor,
+    6px 6px currentColor,8px 6px currentColor,10px 6px currentColor,12px 6px currentColor,14px 6px currentColor,16px 6px currentColor,
+    8px 8px currentColor,10px 8px currentColor,12px 8px currentColor,14px 8px currentColor,
+    4px 10px currentColor,8px 10px currentColor,10px 10px currentColor,12px 10px currentColor,14px 10px currentColor,18px 10px currentColor,
+    2px 12px currentColor,4px 12px currentColor,6px 12px currentColor,8px 12px currentColor,10px 12px currentColor,12px 12px currentColor,14px 12px currentColor,16px 12px currentColor,18px 12px currentColor,20px 12px currentColor,
+    2px 14px currentColor,4px 14px currentColor,6px 14px currentColor,8px 14px currentColor,10px 14px currentColor,12px 14px currentColor,14px 14px currentColor,16px 14px currentColor,20px 14px currentColor,
+    2px 16px currentColor,4px 16px currentColor,6px 16px currentColor,8px 16px currentColor,10px 16px currentColor,12px 16px currentColor,14px 16px currentColor,16px 16px currentColor,22px 16px currentColor,
+    4px 18px currentColor,8px 18px currentColor,10px 18px currentColor,12px 18px currentColor,14px 18px currentColor,16px 18px currentColor,20px 18px currentColor,
+    8px 20px currentColor,10px 20px currentColor,12px 20px currentColor,14px 20px currentColor,16px 20px currentColor,
+    8px 22px currentColor,10px 22px currentColor,14px 22px currentColor,16px 22px currentColor,
+    6px 24px currentColor,8px 24px currentColor,10px 24px currentColor,14px 24px currentColor,16px 24px currentColor,18px 24px currentColor,
+    6px 26px currentColor,8px 26px currentColor,10px 26px currentColor,14px 26px currentColor,16px 26px currentColor,18px 26px currentColor;
+}
+.player-marker.walking.facing-left { animation: crabLeft .22s steps(3,end); }
+.player-marker.walking.facing-right { animation: crabRight .22s steps(3,end); }
+.player-marker.walking.facing-up { animation: crabUp .22s steps(3,end); }
+.player-marker.walking.facing-down { animation: crabDown .22s steps(3,end); }
 .board-frame.waiting .maze-grid { filter: brightness(.48) saturate(.65); }
 .entity {
   position: absolute; z-index: 2; display: grid; place-items: center;
@@ -403,17 +420,25 @@ h1 {
   font: .46rem ui-monospace,monospace; letter-spacing: .08em; text-align: center;
 }
 
-@keyframes walkDown {
-  50% { background-position: 0% 100%; transform: translateY(-3%); }
+@keyframes crabLeft {
+  0% { transform: translateX(42%); }
+  50% { transform: translate(18%,-2px); }
+  100% { transform: translateX(0); }
 }
-@keyframes walkRight {
-  50% { background-position: 33.333% 100%; transform: translateX(3%); }
+@keyframes crabRight {
+  0% { transform: translateX(-42%); }
+  50% { transform: translate(-18%,-2px); }
+  100% { transform: translateX(0); }
 }
-@keyframes walkUp {
-  50% { background-position: 66.667% 100%; transform: translateY(-3%); }
+@keyframes crabUp {
+  0% { transform: translateY(42%); }
+  50% { transform: translate(-2px,18%); }
+  100% { transform: translateY(0); }
 }
-@keyframes walkLeft {
-  50% { background-position: 100% 100%; transform: translateX(-3%); }
+@keyframes crabDown {
+  0% { transform: translateY(-42%); }
+  50% { transform: translate(2px,-18%); }
+  100% { transform: translateY(0); }
 }
 @keyframes targetPulse { to { box-shadow: inset 0 0 15px rgba(245,201,111,.42); } }
 
