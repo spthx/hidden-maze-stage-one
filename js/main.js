@@ -78,6 +78,10 @@ function move(direction) {
   runAction(() => game.move(direction));
 }
 
+document.querySelector("#start-button").addEventListener("click", () => {
+  runAction(() => game.start());
+});
+
 document.querySelectorAll("[data-direction]").forEach((button) => {
   button.addEventListener("click", () => move(button.dataset.direction));
 });

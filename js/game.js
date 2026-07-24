@@ -28,6 +28,8 @@ export class MazeGame {
     this.stage = stage;
     this.wallSet = createWallSet(stage);
     this.state = GameState.PLAYING;
+    this.started = false;
+    this.facing = "up";
     this.player = { ...stage.start };
     this.maxHp = stage.hp;
     this.hp = stage.hp;
@@ -48,7 +50,7 @@ export class MazeGame {
     this.adventurer = { ...stage.adventurer, loot: [] };
     this.adventurerAlive = true;
     this.droppedChests = [];
-    this.lastEvent = { type: "start" };
+    this.lastEvent = { type: "diceReady" };
     this.applyStartRoll();
     this.revealBaseArea();
   }
@@ -139,6 +141,12 @@ export class MazeGame {
     return this.knownIdentities.has(entity.id) || distance(entity, this.player) <= 1;
   }
 
+  start() {
+    if (this.started || this.state !== GameState.PLAYING) return { type: "ignored" };
+    this.started = true;
+    return this.remember({ type: "startConfirmed" });
+  }
+
   finishIfDead(event) {
     if (this.hp > 0) return event;
     this.hp = 0;
@@ -148,6 +156,7 @@ export class MazeGame {
 
   move(directionName) {
     if (
+      !this.started ||
       this.state !== GameState.PLAYING ||
       this.pendingChestId ||
       !DIRECTIONS[directionName]
@@ -156,6 +165,7 @@ export class MazeGame {
     }
 
     const direction = DIRECTIONS[directionName];
+    this.facing = directionName;
     const target = {
       x: this.player.x + direction.x,
       y: this.player.y + direction.y,
@@ -204,7 +214,7 @@ export class MazeGame {
         if (worldEvent) event = worldEvent;
       }
     }
-    return this.remember(event);
+    return this.remember({ ...event, playerMoved: true });
   }
 
   applyWarp(event) {
@@ -242,7 +252,7 @@ export class MazeGame {
   }
 
   getAttackableEnemies() {
-    if (this.state !== GameState.PLAYING) return [];
+    if (!this.started || this.state !== GameState.PLAYING) return [];
     const weapon = this.activeWeapon;
     const livingKeys = new Set(this.livingEntities.map(cellKey));
     return this.livingEntities.filter((enemy) => {
@@ -433,7 +443,7 @@ export class MazeGame {
   }
 
   useTorch() {
-    if (this.torches <= 0 || this.state !== GameState.PLAYING) {
+    if (!this.started || this.torches <= 0 || this.state !== GameState.PLAYING) {
       return { type: "ignored" };
     }
     this.torches -= 1;
@@ -446,7 +456,7 @@ export class MazeGame {
   }
 
   useLight() {
-    if (this.lights <= 0 || this.state !== GameState.PLAYING) {
+    if (!this.started || this.lights <= 0 || this.state !== GameState.PLAYING) {
       return { type: "ignored" };
     }
     this.lights -= 1;

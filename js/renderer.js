@@ -3,7 +3,8 @@ import { cellKey, createWallSet } from "./pathfinding.js";
 import { WEAPONS } from "./stages.js";
 
 const EVENT_COPY = {
-  start: ["開始ダイスが運命を決めた。宝箱は冒険者より先に取れ。", "attention"],
+  diceReady: ["ダイス結果と効果を確認してから探索を開始。", "attention"],
+  startConfirmed: ["探索開始。自分の後に冒険者、最後にモンスターが動く。", "success"],
   move: ["一歩進んだ。冒険者とモンスターも動く。", "neutral"],
   wall: ["石壁だ。ここから先は見通せない。", "danger"],
   fistMonster: ["素手でモンスターを倒した。反撃でHP−1。", "danger"],
@@ -72,6 +73,8 @@ export class Renderer {
     this.rivalStatus = document.querySelector("#rival-status");
     this.dieValue = document.querySelector("#die-value");
     this.dieEffect = document.querySelector("#die-effect");
+    this.dieStrip = document.querySelector(".die-strip");
+    this.startButton = document.querySelector("#start-button");
     this.board = document.querySelector("#maze-grid");
     this.boardFrame = document.querySelector("#board-frame");
     this.eventMessage = document.querySelector("#event-message");
@@ -135,12 +138,18 @@ export class Renderer {
       : "冒険者は脱落";
     this.dieValue.textContent = String(game.dieEffect.roll);
     this.dieEffect.textContent = `${game.dieEffect.name}：${game.dieEffect.description}`;
+    this.dieStrip.classList.toggle("awaiting-start", !game.started);
+    this.startButton.hidden = game.started;
+    this.boardFrame.classList.toggle("waiting", !game.started);
     this.torchCount.textContent = String(game.torches);
     this.lightCount.textContent = String(game.lights);
 
     const targets = game.getAttackableEnemies();
     this.attackButton.disabled =
-      targets.length === 0 || game.isFinished || Boolean(game.pendingChest);
+      !game.started ||
+      targets.length === 0 ||
+      game.isFinished ||
+      Boolean(game.pendingChest);
     this.attackButton.classList.toggle("active", targeting);
     this.attackCaption.textContent = targeting
       ? "盤面の気配を選択"
@@ -148,9 +157,15 @@ export class Renderer {
         ? `攻撃可能 ${targets.length}体`
         : "射程内に対象なし";
     this.torchButton.disabled =
-      game.torches <= 0 || game.isFinished || Boolean(game.pendingChest);
+      !game.started ||
+      game.torches <= 0 ||
+      game.isFinished ||
+      Boolean(game.pendingChest);
     this.lightButton.disabled =
-      game.lights <= 0 || game.isFinished || Boolean(game.pendingChest);
+      !game.started ||
+      game.lights <= 0 ||
+      game.isFinished ||
+      Boolean(game.pendingChest);
   }
 
   renderBoard(game, targeting) {
@@ -213,7 +228,11 @@ export class Renderer {
           }
         }
         if (current && game.state !== GameState.CLEAR) {
-          cell.append(createMarker("player-marker", ""));
+          const playerMarker = createMarker(
+            `player-marker facing-${game.facing}${game.lastEvent.playerMoved ? " walking" : ""}`,
+            "",
+          );
+          cell.append(playerMarker);
         }
         fragment.append(cell);
       }
@@ -225,13 +244,11 @@ export class Renderer {
     const copy = getEventCopy(game.lastEvent);
     this.eventMessage.textContent = copy.text;
     this.messagePanel.dataset.tone = copy.tone;
-    this.messagePanel.classList.remove("message-replay");
-    void this.messagePanel.offsetWidth;
-    this.messagePanel.classList.add("message-replay");
   }
 
   renderPanels(game, stageIndex, targeting) {
-    const blocked = game.isFinished || Boolean(game.pendingChest) || targeting;
+    const blocked =
+      !game.started || game.isFinished || Boolean(game.pendingChest) || targeting;
     this.moveButtons.forEach((button) => {
       button.disabled = blocked;
     });

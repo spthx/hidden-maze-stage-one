@@ -70,6 +70,14 @@ test("the same seed creates the same dungeon and die roll", () => {
   assert.deepEqual(first, second);
 });
 
+test("movement is locked until the die result is confirmed", () => {
+  const game = new MazeGame(createTestStage());
+  assert.equal(game.move("right").type, "ignored");
+  assert.deepEqual(game.player, { x: 0, y: 4 });
+  assert.equal(game.start().type, "startConfirmed");
+  assert.equal(game.move("right").type !== "ignored", true);
+});
+
 test("weapon limits remain sword 3, spear 2, bow 2", () => {
   assert.equal(WEAPONS.sword.uses, 3);
   assert.equal(WEAPONS.spear.uses, 2);
@@ -124,6 +132,7 @@ test("a sword or silver sword must finish the boss from an adjacent cell", () =>
     adventurer: { id: "adventurer", x: 0, y: 0, loot: [] },
   });
   const game = new MazeGame(stage);
+  game.start();
   game.hasSilverSword = true;
   game.mappedCells.add("4,4");
   assert.equal(game.getAttackableEnemies().some((item) => item.kind === "boss"), true);
@@ -141,6 +150,7 @@ test("spear is adjacent-capable while bow is not", () => {
     ],
   });
   const spearGame = new MazeGame(stage);
+  spearGame.start();
   spearGame.weapon = "spear";
   spearGame.weaponUses = 2;
   spearGame.mappedCells.add("1,2");
@@ -151,6 +161,7 @@ test("spear is adjacent-capable while bow is not", () => {
   );
 
   const bowGame = new MazeGame(stage);
+  bowGame.start();
   bowGame.weapon = "bow";
   bowGame.weaponUses = 2;
   bowGame.mappedCells.add("1,2");

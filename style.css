@@ -125,7 +125,7 @@ h1 {
 .mission p { margin: 0; color: #a9bbb5; font-size: clamp(.63rem,2.6vw,.75rem); }
 .die-strip {
   display: grid;
-  grid-template-columns: auto 28px 1fr;
+  grid-template-columns: auto 28px minmax(0,1fr) auto;
   min-height: 29px;
   align-items: center;
   gap: 7px;
@@ -141,6 +141,22 @@ h1 {
   font: .82rem ui-monospace,monospace;
 }
 .die-strip p { margin: 0; color: #baaaca; font-size: .58rem; }
+.die-strip.awaiting-start {
+  border-color: var(--violet);
+  background: rgba(53,31,68,.72);
+  box-shadow: 0 0 18px rgba(198,152,255,.12);
+}
+.start-button {
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--violet);
+  border-radius: 3px;
+  background: rgba(198,152,255,.14);
+  color: #ead8ff;
+  font-size: .57rem;
+  white-space: nowrap;
+}
+.die-strip:not(.awaiting-start) .start-button { display: none; }
 
 .status-grid { display: grid; grid-template-columns: .9fr 1.25fr 1fr; gap: 6px; margin-bottom: 7px; }
 .status-card {
@@ -222,11 +238,25 @@ h1 {
 }
 .cell.current { z-index: 3; overflow: visible; background: radial-gradient(circle,rgba(120,240,189,.23),#0b1e18 65%); }
 .player-marker {
-  position: relative; z-index: 5; width: 34%; aspect-ratio: 1;
-  border: 2px solid #d9fff0; border-radius: 50%; background: var(--green);
-  box-shadow: 0 0 0 5px rgba(120,240,189,.1),0 0 18px var(--green);
-  animation: playerPulse 1.5s ease-in-out infinite;
+  position: relative;
+  z-index: 5;
+  width: 100%;
+  height: 100%;
+  background-image: url("./public/hero-walk-sheet.png");
+  background-repeat: no-repeat;
+  background-size: 400% 200%;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 3px rgba(120,240,189,.72));
 }
+.player-marker.facing-down { background-position: 0% 0%; }
+.player-marker.facing-right { background-position: 33.333% 0%; }
+.player-marker.facing-up { background-position: 66.667% 0%; }
+.player-marker.facing-left { background-position: 100% 0%; }
+.player-marker.walking.facing-down { animation: walkDown .34s steps(1,end) 2; }
+.player-marker.walking.facing-right { animation: walkRight .34s steps(1,end) 2; }
+.player-marker.walking.facing-up { animation: walkUp .34s steps(1,end) 2; }
+.player-marker.walking.facing-left { animation: walkLeft .34s steps(1,end) 2; }
+.board-frame.waiting .maze-grid { filter: brightness(.48) saturate(.65); }
 .entity {
   position: absolute; z-index: 2; display: grid; place-items: center;
   font-family: ui-monospace,"SFMono-Regular",Consolas,monospace; font-weight: 700;
@@ -277,13 +307,16 @@ h1 {
 .wall-chip { background: #4b5a54; }
 
 .message-panel {
-  position: absolute; z-index: 7; top: 50%; left: 50%; display: flex;
-  width: min(86%,360px); min-height: 48px; align-items: center; padding: 9px 12px;
-  border: 1px solid rgba(111,160,143,.38); background: rgba(3,12,10,.92);
-  box-shadow: 0 10px 30px rgba(0,0,0,.58),inset 0 0 18px rgba(120,240,189,.04);
-  pointer-events: none; opacity: 0; transform: translate(-50%,-50%);
+  display: flex;
+  width: 100%;
+  min-height: 42px;
+  align-items: center;
+  margin: 1px 0 6px;
+  padding: 7px 9px;
+  border: 1px solid rgba(111,160,143,.24);
+  background: rgba(5,16,13,.82);
+  box-shadow: inset 0 0 18px rgba(120,240,189,.025);
 }
-.message-panel.message-replay { animation: messageToast 2.2s ease both; }
 .message-panel[data-tone="danger"] { border-color: rgba(242,126,113,.4); }
 .message-panel[data-tone="attention"] { border-color: rgba(245,201,111,.45); }
 .message-pulse {
@@ -292,7 +325,20 @@ h1 {
 }
 .message-panel[data-tone="danger"] .message-pulse { background: var(--red); box-shadow: 0 0 8px var(--red); }
 .message-panel[data-tone="attention"] .message-pulse { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
-.message-panel p { margin: 0; color: #d5e4de; font-size: clamp(.67rem,2.7vw,.79rem); line-height: 1.5; text-align: left; }
+.message-panel p {
+  margin: 0;
+  color: #d5e4de;
+  font-size: clamp(.65rem,2.55vw,.75rem);
+  line-height: 1.4;
+}
+.message-copy { min-width: 0; }
+.message-copy small {
+  display: block;
+  margin-top: 2px;
+  color: #627c73;
+  font-size: .48rem;
+  letter-spacing: .04em;
+}
 .action-bar { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 6px; margin: 6px 0; }
 .action-button {
   min-width: 0; min-height: 44px; padding: 5px 4px;
@@ -357,19 +403,28 @@ h1 {
   font: .46rem ui-monospace,monospace; letter-spacing: .08em; text-align: center;
 }
 
-@keyframes playerPulse {
-  50% { box-shadow: 0 0 0 8px rgba(120,240,189,.04),0 0 25px var(--green); }
+@keyframes walkDown {
+  50% { background-position: 0% 100%; transform: translateY(-3%); }
+}
+@keyframes walkRight {
+  50% { background-position: 33.333% 100%; transform: translateX(3%); }
+}
+@keyframes walkUp {
+  50% { background-position: 66.667% 100%; transform: translateY(-3%); }
+}
+@keyframes walkLeft {
+  50% { background-position: 100% 100%; transform: translateX(-3%); }
 }
 @keyframes targetPulse { to { box-shadow: inset 0 0 15px rgba(245,201,111,.42); } }
-@keyframes messageToast {
-  0% { opacity: 0; transform: translate(-50%,calc(-50% + 8px)) scale(.98); }
-  10%,72% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
-  100% { opacity: 0; transform: translate(-50%,calc(-50% - 6px)) scale(.99); }
-}
+
 @keyframes boardHit {
   20% { transform: translateX(-4px); }
   50% { transform: translateX(4px); }
   80% { transform: translateX(-2px); }
+}
+@media (max-width: 420px) {
+  .die-strip { grid-template-columns: auto 28px minmax(0,1fr); }
+  .start-button { grid-column: 1 / -1; width: 100%; }
 }
 @media (max-height: 740px) {
   :root { --board-size: min(78vw,36dvh,300px); }
@@ -380,7 +435,7 @@ h1 {
   .utility-bar p { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .message-panel.message-replay { animation: none !important; opacity: 1; }
+
   *,*::before,*::after {
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
