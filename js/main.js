@@ -1,7 +1,7 @@
-import { DIRECTIONS, MazeGame } from "./game.js";
-import { cellKey } from "./pathfinding.js";
-import { Renderer } from "./renderer.js";
-import { generateStage, STAGE_CONFIGS } from "./stages.js";
+import { DIRECTIONS, MazeGame } from "./game.js?v=8";
+import { cellKey } from "./pathfinding.js?v=8";
+import { Renderer } from "./renderer.js?v=8";
+import { generateStage, STAGE_CONFIGS } from "./stages.js?v=8";
 
 class GameSound {
   constructor() {

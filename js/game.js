@@ -5,8 +5,8 @@ import {
   hasClearOrthogonalLine,
   isInside,
   revealWithinRadius,
-} from "./pathfinding.js";
-import { WEAPONS } from "./stages.js";
+} from "./pathfinding.js?v=8";
+import { WEAPONS } from "./stages.js?v=8";
 
 export const GameState = Object.freeze({
   PLAYING: "playing",

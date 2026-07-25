@@ -1,6 +1,6 @@
-import { DIRECTIONS, GameState } from "./game.js";
-import { cellKey, createWallSet } from "./pathfinding.js";
-import { WEAPONS } from "./stages.js";
+import { DIRECTIONS, GameState } from "./game.js?v=8";
+import { cellKey, createWallSet } from "./pathfinding.js?v=8";
+import { WEAPONS } from "./stages.js?v=8";
 
 const EVENT_COPY = {
   diceReady: ["ダイス結果と効果を確認してから探索を開始。", "attention"],
