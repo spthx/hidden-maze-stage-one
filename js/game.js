@@ -50,6 +50,7 @@ export class MazeGame {
     this.adventurer = { ...stage.adventurer, loot: [] };
     this.adventurerAlive = true;
     this.droppedChests = [];
+    this.lastWorldEvents = [];
     this.lastEvent = { type: "diceReady" };
     this.applyStartRoll();
     this.revealBaseArea();
@@ -118,9 +119,9 @@ export class MazeGame {
     const effects = {
       1: ["深い闇", "松明を1つ失った"],
       2: ["旅人の地図", "宝箱を1つ発見"],
-      3: ["魔物活性", "モンスターが2歩動く"],
+      3: ["魔物活性", "毎ターン、モンスターが2歩動く"],
       4: ["追い風", "松明を1つ獲得"],
-      5: ["先行者", "冒険者が2歩動く"],
+      5: ["先行者", "毎ターン、冒険者が2歩動く"],
       6: ["銀の導き", "銀の剣の場所を発見"],
     };
     const [name, description] = effects[roll];
@@ -199,18 +200,30 @@ export class MazeGame {
       this.knownIdentities.add(targetEntity.id);
       this.moveCount += 1;
       if (this.defeatBoss()) {
-        return this.remember({ type: "bossStrike", contactAttack: true });
+        return this.remember({
+          type: "bossStrike",
+          contactAttack: true,
+          worldEvents: [],
+        });
       }
       this.hp -= 2;
       const event = this.finishIfDead({ type: "bossRepels", damage: 2 });
-      if (!this.isFinished) this.advanceWorld();
-      return this.remember(event);
+      if (!this.isFinished) {
+        this.advanceWorld();
+      } else {
+        this.lastWorldEvents = [];
+      }
+      return this.remember({
+        ...event,
+        worldEvents: [...this.lastWorldEvents],
+      });
     }
 
     this.player = target;
     this.moveCount += 1;
     this.routeHistory.push({ ...this.player });
     let event = { type: "move" };
+    let worldEvents = [];
 
     if (targetEntity?.kind === "monster") {
       this.defeatedMonsters.add(targetEntity.id);
@@ -230,11 +243,11 @@ export class MazeGame {
         this.pendingChestId = chest.id;
         event = { type: "chestFound", chestId: chest.id };
       } else {
-        const worldEvent = this.advanceWorld();
-        if (worldEvent) event = worldEvent;
+        this.advanceWorld();
+        worldEvents = [...this.lastWorldEvents];
       }
     }
-    return this.remember({ ...event, playerMoved: true });
+    return this.remember({ ...event, playerMoved: true, worldEvents });
   }
 
   applyWarp(event) {
@@ -305,20 +318,23 @@ export class MazeGame {
       distance(target, this.player) === 1 &&
       this.canDefeatBoss;
 
-    this.attackCount += 1;
     if (bossFinisher) {
       this.defeatBoss();
-      return this.remember({ type: "bossStrike" });
+      return this.remember({ type: "bossStrike", worldEvents: [] });
     }
 
+    this.attackCount += 1;
     this.weaponUses -= 1;
     if (target.kind === "boss") {
       const event = {
         type: "bossResists",
         depleted: this.weaponUses === 0,
       };
-      const worldEvent = this.advanceWorld();
-      return this.remember(worldEvent ?? event);
+      this.advanceWorld();
+      return this.remember({
+        ...event,
+        worldEvents: [...this.lastWorldEvents],
+      });
     }
 
     if (target.kind === "adventurer") {
@@ -327,8 +343,11 @@ export class MazeGame {
         type: "adventurerStrike",
         depleted: this.weaponUses === 0,
       };
-      const worldEvent = this.advanceWorld();
-      return this.remember(worldEvent ?? event);
+      this.advanceWorld();
+      return this.remember({
+        ...event,
+        worldEvents: [...this.lastWorldEvents],
+      });
     }
 
     this.defeatedMonsters.add(target.id);
@@ -336,8 +355,11 @@ export class MazeGame {
       type: "weaponStrike",
       depleted: this.weaponUses === 0,
     };
-    const worldEvent = this.advanceWorld();
-    return this.remember(worldEvent ?? event);
+    this.advanceWorld();
+    return this.remember({
+      ...event,
+      worldEvents: [...this.lastWorldEvents],
+    });
   }
 
   defeatAdventurer() {
@@ -354,6 +376,7 @@ export class MazeGame {
   }
 
   advanceWorld() {
+    this.lastWorldEvents = [];
     if (this.isFinished) return null;
     let event = null;
     const rivalSteps = this.stage.startRoll === 5 ? 2 : 1;
@@ -390,6 +413,7 @@ export class MazeGame {
     if (candidates.length === 0) return null;
 
     const next = candidates[0].path[1];
+    const from = { x: this.adventurer.x, y: this.adventurer.y };
     const occupied = new Set([
       cellKey(this.player),
       cellKey(this.stage.boss),
@@ -398,13 +422,29 @@ export class MazeGame {
     if (!occupied.has(cellKey(next))) {
       this.adventurer.x = next.x;
       this.adventurer.y = next.y;
+      this.lastWorldEvents.push({
+        type: "rivalMove",
+        from,
+        to: { x: next.x, y: next.y },
+      });
     }
 
     const chest = this.findUnopenedChestAt(this.adventurer);
     if (!chest || chest.id === this.pendingChestId) return null;
     this.openedChests.add(chest.id);
     this.adventurer.loot.push(chest.content);
-    return { type: "rivalLooted", lootCount: this.adventurer.loot.length };
+    const event = {
+      type: "rivalLooted",
+      lootCount: this.adventurer.loot.length,
+      itemType: chest.content.type,
+      weaponId: chest.content.weaponId ?? null,
+      bossWeapon:
+        chest.content.type === "silverSword" ||
+        (chest.content.type === "weapon" &&
+          chest.content.weaponId === "sword"),
+    };
+    this.lastWorldEvents.push(event);
+    return event;
   }
 
   moveMonsters() {
@@ -412,6 +452,7 @@ export class MazeGame {
     const occupiedMonsters = new Set(this.livingMonsters.map(cellKey));
     for (const monster of this.monsters) {
       if (this.defeatedMonsters.has(monster.id)) continue;
+      const from = { x: monster.x, y: monster.y };
       const inHiddenRoom = Boolean(monster.hiddenRoom);
       const targets = [];
       const playerInRoom = this.stage.warp?.roomCells.some(
@@ -437,6 +478,7 @@ export class MazeGame {
       if (cellKey(next) === cellKey(this.player)) {
         this.hp -= 1;
         event = this.finishIfDead({ type: "monsterHitPlayer", damage: 1 });
+        this.lastWorldEvents.push(event);
       } else if (
         target.kind === "adventurer" &&
         this.adventurerAlive &&
@@ -444,14 +486,27 @@ export class MazeGame {
       ) {
         monster.x = next.x;
         monster.y = next.y;
+        this.lastWorldEvents.push({
+          type: "monsterMove",
+          monsterId: monster.id,
+          from,
+          to: { x: next.x, y: next.y },
+        });
         this.defeatAdventurer();
         event = { type: "monsterCaughtRival" };
+        this.lastWorldEvents.push(event);
       } else if (
         !occupiedMonsters.has(cellKey(next)) &&
         cellKey(next) !== cellKey(this.stage.boss)
       ) {
         monster.x = next.x;
         monster.y = next.y;
+        this.lastWorldEvents.push({
+          type: "monsterMove",
+          monsterId: monster.id,
+          from,
+          to: { x: next.x, y: next.y },
+        });
       }
       occupiedMonsters.add(cellKey(monster));
       if (this.isFinished) break;
@@ -468,8 +523,11 @@ export class MazeGame {
       this.mappedCells.add(key);
     }
     this.updateIdentityKnowledge();
-    const worldEvent = this.advanceWorld();
-    return this.remember(worldEvent ?? { type: "torch" });
+    this.advanceWorld();
+    return this.remember({
+      type: "torch",
+      worldEvents: [...this.lastWorldEvents],
+    });
   }
 
   useLight() {
@@ -481,8 +539,11 @@ export class MazeGame {
       this.mappedCells.add(key);
     }
     this.updateIdentityKnowledge();
-    const worldEvent = this.advanceWorld();
-    return this.remember(worldEvent ?? { type: "light" });
+    this.advanceWorld();
+    return this.remember({
+      type: "light",
+      worldEvents: [...this.lastWorldEvents],
+    });
   }
 
   applyChestItem(content) {
@@ -519,14 +580,20 @@ export class MazeGame {
     const items = chest.content.type === "bundle" ? chest.content.items : [chest.content];
     let event = { type: "chestEmpty" };
     for (const item of items) event = this.applyChestItem(item);
-    const worldEvent = this.advanceWorld();
-    return this.remember(worldEvent ?? event);
+    this.advanceWorld();
+    return this.remember({
+      ...event,
+      worldEvents: [...this.lastWorldEvents],
+    });
   }
 
   leaveChest() {
     if (!this.pendingChest) return { type: "ignored" };
     this.pendingChestId = null;
-    const worldEvent = this.advanceWorld();
-    return this.remember(worldEvent ?? { type: "chestLeft" });
+    this.advanceWorld();
+    return this.remember({
+      type: "chestLeft",
+      worldEvents: [...this.lastWorldEvents],
+    });
   }
 }

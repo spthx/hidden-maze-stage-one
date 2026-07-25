@@ -94,10 +94,76 @@ test("adventurer walks toward treasure and takes it", () => {
   const game = new MazeGame(stage);
   const event = game.advanceWorld();
   assert.equal(event.type, "rivalLooted");
+  assert.equal(event.itemType, "weapon");
+  assert.equal(event.weaponId, "sword");
+  assert.equal(event.bossWeapon, true);
   assert.equal(game.openedChests.has("chest-1"), true);
   assert.equal(game.rivalLootCount, 1);
 });
 
+test("recurring die effects say they apply every turn", () => {
+  const monsterGame = new MazeGame(createTestStage({ startRoll: 3 }));
+  const rivalGame = new MazeGame(createTestStage({ startRoll: 5 }));
+  assert.equal(
+    monsterGame.dieEffect.description,
+    "毎ターン、モンスターが2歩動く",
+  );
+  assert.equal(
+    rivalGame.dieEffect.description,
+    "毎ターン、冒険者が2歩動く",
+  );
+});
+
+test("player action remains primary and ordered world events are attached", () => {
+  const stage = createTestStage({
+    monsters: [{ id: "monster-1", x: 3, y: 1 }],
+    adventurer: { id: "adventurer", x: 2, y: 2, loot: [] },
+    chests: [
+      { id: "chest-1", x: 2, y: 1, content: { type: "silverSword" } },
+    ],
+  });
+  const game = new MazeGame(stage);
+  game.start();
+  const event = game.move("right");
+
+  assert.equal(event.type, "move");
+  assert.deepEqual(
+    event.worldEvents.map((worldEvent) => worldEvent.type),
+    ["rivalMove", "rivalLooted", "monsterMove", "monsterCaughtRival"],
+  );
+  assert.deepEqual(event.worldEvents[0], {
+    type: "rivalMove",
+    from: { x: 2, y: 2 },
+    to: { x: 2, y: 1 },
+  });
+  assert.deepEqual(event.worldEvents[2], {
+    type: "monsterMove",
+    monsterId: "monster-1",
+    from: { x: 3, y: 1 },
+    to: { x: 2, y: 1 },
+  });
+  assert.equal(event.worldEvents[1].itemType, "silverSword");
+  assert.equal(event.worldEvents[1].weaponId, null);
+  assert.equal(event.worldEvents[1].bossWeapon, true);
+  assert.deepEqual(game.lastWorldEvents, event.worldEvents);
+});
+
+test("advanceWorld still returns the last important event", () => {
+  const stage = createTestStage({
+    monsters: [{ id: "monster-1", x: 3, y: 1 }],
+    adventurer: { id: "adventurer", x: 2, y: 2, loot: [] },
+    chests: [
+      { id: "chest-1", x: 2, y: 1, content: { type: "herb" } },
+    ],
+  });
+  const game = new MazeGame(stage);
+  const event = game.advanceWorld();
+  assert.equal(event.type, "monsterCaughtRival");
+  assert.deepEqual(
+    game.lastWorldEvents.map((worldEvent) => worldEvent.type),
+    ["rivalMove", "rivalLooted", "monsterMove", "monsterCaughtRival"],
+  );
+});
 test("monster chooses the adventurer as the nearer target and can defeat the decoy", () => {
   const stage = createTestStage({
     monsters: [{ id: "monster-1", x: 2, y: 1 }],
@@ -139,6 +205,7 @@ test("a sword or silver sword must finish the boss from an adjacent cell", () =>
   const event = game.attack("4,4");
   assert.equal(event.type, "bossStrike");
   assert.equal(game.state, "clear");
+  assert.equal(game.attackCount, 1);
 });
 
 test("walking into the boss wins when carrying a valid boss weapon", () => {

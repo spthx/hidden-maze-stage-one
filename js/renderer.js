@@ -1,4 +1,4 @@
-import { GameState } from "./game.js";
+import { DIRECTIONS, GameState } from "./game.js";
 import { cellKey, createWallSet } from "./pathfinding.js";
 import { WEAPONS } from "./stages.js";
 
@@ -12,7 +12,7 @@ const EVENT_COPY = {
   bossRepels: ["ボスには通常攻撃が通じない。弾き飛ばされHP−2。", "danger"],
   weaponStrike: ["先制攻撃成功。反撃を受けずに倒した。", "success"],
   adventurerStrike: ["冒険者を攻撃した。奪った宝はその場に落ちた。", "danger"],
-  bossStrike: ["銀の一撃がボスを貫いた。迷宮を制圧した。", "success"],
+  bossStrike: ["決めの一撃がボスを貫いた。迷宮を制圧した。", "success"],
   bossResists: ["遠距離攻撃はボスに弾かれた。銀の剣で隣接攻撃が必要だ。", "danger"],
   chestFound: ["宝箱を発見。開ける間にも相手は動く。", "attention"],
   chestLeft: ["宝箱を残した。冒険者に奪われるかもしれない。", "neutral"],
@@ -27,6 +27,7 @@ const EVENT_COPY = {
   invalidTarget: ["射程外か、壁か別の気配に遮られている。", "danger"],
   noTarget: ["現在の射程内に気配はない。", "neutral"],
   rivalLooted: ["他の冒険者が宝箱を奪った。倒せば取り戻せる。", "attention"],
+  contactWarning: ["気配が行く手を塞いでいる。もう一度進むと素手で接触する。", "danger"],
   monsterCaughtRival: ["モンスターが冒険者を倒した。今が逃げる好機だ。", "success"],
   monsterHitPlayer: ["モンスターに追いつかれた。HP−1。", "danger"],
   warpIn: ["転移床が作動。隔離された隠し部屋へ飛ばされた。", "attention"],
@@ -34,21 +35,71 @@ const EVENT_COPY = {
   gameOver: ["HPが尽きた。迷宮全体を開示する。", "danger"],
 };
 
+function containsBossWeapon(content) {
+  if (!content) return false;
+  if (content.type === "silverSword") return true;
+  if (content.type === "weapon" && content.weaponId === "sword") return true;
+  return (
+    content.type === "bundle" &&
+    Array.isArray(content.items) &&
+    content.items.some(containsBossWeapon)
+  );
+}
+
 function getEventCopy(event) {
-  const [baseText, tone] = EVENT_COPY[event.type] ?? EVENT_COPY.start;
+  const [baseText, tone] = EVENT_COPY[event?.type] ?? EVENT_COPY.diceReady;
   let text = baseText;
-  if (event.type === "weaponFound") {
+  if (event?.type === "weaponFound") {
     const weapon = WEAPONS[event.weaponId];
-    text = `${weapon.name}を入手。${weapon.description}。`;
+    text = weapon
+      ? `${weapon.name}を入手。${weapon.description}。`
+      : "武器を入手した。";
   }
-  if (event.type === "warpIn") {
+  if (event?.type === "warpIn") {
     text =
       event.roomType === "treasure"
         ? "転移先は宝物庫らしい。帰り道も同じ転移床だ。"
         : "転移先はモンスターハウスだ。帰り道を確保しろ。";
   }
-  if (event.depleted) text += " 武器を使い切り、素手になった。";
+  if (
+    event?.type === "rivalLooted" &&
+    (
+      event.bossWeapon ||
+      event.itemType === "silverSword" ||
+      event.weaponId === "sword" ||
+      containsBossWeapon(event.content) ||
+      containsBossWeapon(event.item)
+    )
+  ) {
+    text = "警告：他の冒険者が対ボス武器を奪った。追って取り戻せ。";
+  }
+  if (event?.type === "contactWarning") {
+    if (event.kind === "boss") {
+      text = "対ボス武器がない。接触するとHP−2。もう一度で決行。";
+    } else if (event.attackable) {
+      text = "接触すると素手でHP−1。武器は攻撃ボタンから使える。もう一度で決行。";
+    }
+  }
+  if (event?.depleted) text += " 武器を使い切り、素手になった。";
   return { text, tone };
+}
+
+function getWorldEvents(event) {
+  return Array.isArray(event?.worldEvents) ? event.worldEvents : [];
+}
+
+function trailDirection({ from, to }) {
+  if (!from || !to) return { name: "unknown", arrow: "•" };
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    return dx > 0
+      ? { name: "right", arrow: "→" }
+      : { name: "left", arrow: "←" };
+  }
+  return dy > 0
+    ? { name: "down", arrow: "↓" }
+    : { name: "up", arrow: "↑" };
 }
 
 function createMarker(className, text) {
@@ -67,6 +118,7 @@ export class Renderer {
     this.stageTabs = [...document.querySelectorAll("[data-stage-index]")];
     this.hpValue = document.querySelector("#hp-value");
     this.hpHearts = document.querySelector("#hp-hearts");
+    this.hpCard = document.querySelector(".hp-card");
     this.weaponName = document.querySelector("#weapon-name");
     this.weaponUses = document.querySelector("#weapon-uses");
     this.mapValue = document.querySelector("#map-value");
@@ -74,6 +126,9 @@ export class Renderer {
     this.dieValue = document.querySelector("#die-value");
     this.dieEffect = document.querySelector("#die-effect");
     this.dieStrip = document.querySelector(".die-strip");
+    this.objectiveStrip = document.querySelector(".objective-strip");
+    this.bossWeaponStatus = document.querySelector("#boss-weapon-status");
+    this.turnCount = document.querySelector("#turn-count");
     this.startButton = document.querySelector("#start-button");
     this.board = document.querySelector("#maze-grid");
     this.boardFrame = document.querySelector("#board-frame");
@@ -96,14 +151,19 @@ export class Renderer {
     this.resultAttacks = document.querySelector("#result-attacks");
     this.resultMap = document.querySelector("#result-map");
     this.nextStageButton = document.querySelector("#next-stage-button");
+    this.lastPlayerAnimationEvent = null;
   }
 
   render(game, stageIndex, targeting = false) {
+    const animatePlayer =
+      game.lastEvent !== this.lastPlayerAnimationEvent &&
+      Boolean(game.lastEvent?.playerMoved);
     this.renderHeader(game, stageIndex);
     this.renderStatus(game, targeting);
-    this.renderBoard(game, targeting);
+    this.renderBoard(game, targeting, animatePlayer);
     this.renderMessage(game);
     this.renderPanels(game, stageIndex, targeting);
+    if (animatePlayer) this.lastPlayerAnimationEvent = game.lastEvent;
   }
 
   renderHeader(game, stageIndex) {
@@ -112,6 +172,8 @@ export class Renderer {
     this.stageTotal.textContent = `/ ${this.stageTabs.length}`;
     this.stageTabs.forEach((button, index) => {
       button.classList.toggle("active", index === stageIndex);
+      button.disabled = game.started;
+      button.setAttribute("aria-disabled", String(game.started));
     });
   }
 
@@ -119,7 +181,12 @@ export class Renderer {
     this.hpValue.textContent = `${game.hp} / ${game.maxHp}`;
     this.hpHearts.textContent =
       "♥".repeat(game.hp) + "♡".repeat(Math.max(0, game.maxHp - game.hp));
-    document.querySelector(".hp-card").classList.toggle("danger", game.hp <= 2);
+    const hpRatio = game.maxHp > 0 ? (game.hp / game.maxHp) * 100 : 0;
+    this.hpCard.style.setProperty(
+      "--hp-ratio",
+      `${Math.max(0, Math.min(100, hpRatio))}%`,
+    );
+    this.hpCard.classList.toggle("danger", game.hp <= 2);
 
     const weapon = game.activeWeapon;
     this.weaponName.textContent = [
@@ -138,11 +205,40 @@ export class Renderer {
       : "冒険者は脱落";
     this.dieValue.textContent = String(game.dieEffect.roll);
     this.dieEffect.textContent = `${game.dieEffect.name}：${game.dieEffect.description}`;
+    this.dieStrip.dataset.fortune = game.dieEffect.roll % 2 === 0 ? "good" : "bad";
     this.dieStrip.classList.toggle("awaiting-start", !game.started);
     this.startButton.hidden = game.started;
     this.boardFrame.classList.toggle("waiting", !game.started);
     this.torchCount.textContent = String(game.torches);
     this.lightCount.textContent = String(game.lights);
+    this.turnCount.textContent = `TURN ${game.moveCount}`;
+
+    const bossDefeated = game.defeatedMonsters.has(game.stage.boss.id);
+    const rivalHasBossWeapon =
+      game.adventurerAlive &&
+      game.adventurer.loot.some(containsBossWeapon);
+    const bossWeaponStillAvailable = game.allChests.some(
+      (chest) =>
+        !game.openedChests.has(chest.id) &&
+        containsBossWeapon(chest.content),
+    );
+    let objectiveState = "search";
+    let objectiveCopy = "未発見 — 宝箱を探せ";
+    if (bossDefeated) {
+      objectiveState = "done";
+      objectiveCopy = "討伐済み — 迷宮制圧";
+    } else if (game.canDefeatBoss) {
+      objectiveState = "ready";
+      objectiveCopy = "準備完了 — ボスへ接触せよ";
+    } else if (rivalHasBossWeapon) {
+      objectiveState = "rival";
+      objectiveCopy = "冒険者が所持 — 追って奪い返せ";
+    } else if (!bossWeaponStillAvailable) {
+      objectiveState = "lost";
+      objectiveCopy = "喪失 — この探索では討伐不能";
+    }
+    this.objectiveStrip.dataset.state = objectiveState;
+    this.bossWeaponStatus.textContent = objectiveCopy;
 
     const targets = game.getAttackableEnemies();
     this.attackButton.disabled =
@@ -168,12 +264,29 @@ export class Renderer {
       Boolean(game.pendingChest);
   }
 
-  renderBoard(game, targeting) {
+  renderBoard(game, targeting, animatePlayer = false) {
     const revealAll = game.isFinished;
     const wallSet = createWallSet(game.stage);
     const routeKeys = new Set(game.routeHistory.map(cellKey));
     const attackableKeys = new Set(
       targeting ? game.getAttackableEnemies().map(cellKey) : [],
+    );
+    const canMoveDirectly =
+      game.started &&
+      !game.isFinished &&
+      !game.pendingChest &&
+      !targeting;
+    const trailEvents = [
+      ...(game.lastEvent?.type === "rivalMove" ||
+      game.lastEvent?.type === "monsterMove"
+        ? [game.lastEvent]
+        : []),
+      ...getWorldEvents(game.lastEvent),
+    ].filter(
+      (event) =>
+        (event.type === "rivalMove" || event.type === "monsterMove") &&
+        event.from &&
+        event.to,
     );
     const fragment = document.createDocumentFragment();
     this.board.style.setProperty("--grid-size", game.stage.width);
@@ -190,12 +303,28 @@ export class Renderer {
           (item) => cellKey(item) === key && !game.openedChests.has(item.id),
         );
         const entity = game.livingEntities.find((item) => cellKey(item) === key);
-        const identityKnown = entity && (revealAll || game.isIdentityKnown(entity));
+        const identityKnown =
+          entity && (revealAll || game.isIdentityKnown(entity));
         const warp =
           game.stage.warp &&
-          (cellKey(game.stage.warp.entry) === key || cellKey(game.stage.warp.exit) === key);
+          (
+            cellKey(game.stage.warp.entry) === key ||
+            cellKey(game.stage.warp.exit) === key
+          );
         const targetable = attackableKeys.has(key);
-        const cell = document.createElement(targetable ? "button" : "div");
+        const contactWarning =
+          game.lastEvent?.type === "contactWarning" &&
+          game.lastEvent.contactKey === key;
+        const moveDirection = canMoveDirectly
+          ? Object.entries(DIRECTIONS).find(
+              ([, direction]) =>
+                game.player.x + direction.x === x &&
+                game.player.y + direction.y === y,
+            )?.[0] ?? null
+          : null;
+        const cell = document.createElement(
+          targetable || moveDirection ? "button" : "div",
+        );
         const classes = ["cell"];
 
         if (!mapped) classes.push("unknown");
@@ -204,6 +333,8 @@ export class Renderer {
         if (mapped && routeKeys.has(key)) classes.push("visited");
         if (current) classes.push("current");
         if (targetable) classes.push("targetable");
+        if (moveDirection) classes.push("movable");
+        if (contactWarning) classes.push("contact-warning");
         if (revealAll) classes.push("revealed");
         cell.className = classes.join(" ");
         cell.setAttribute("role", "gridcell");
@@ -212,24 +343,45 @@ export class Renderer {
           cell.type = "button";
           cell.dataset.targetKey = key;
           cell.setAttribute("aria-label", `${y + 1}行${x + 1}列の気配を攻撃`);
+        } else if (moveDirection) {
+          cell.type = "button";
+          cell.dataset.moveDirection = moveDirection;
+          cell.setAttribute(
+            "aria-label",
+            contactWarning
+              ? `${y + 1}行${x + 1}列の気配へ接触。もう一度押して確定`
+              : `${y + 1}行${x + 1}列へ移動`,
+          );
         }
 
         if (mapped && !wall) {
-          if (warp) cell.append(createMarker("entity warp-marker", "◇"));
-          if (chest) cell.append(createMarker("entity chest-marker", "▣"));
+          for (const trailEvent of trailEvents) {
+            if (cellKey(trailEvent.to) !== key) continue;
+            const direction = trailDirection(trailEvent);
+            const kind =
+              trailEvent.type === "rivalMove" ? "rival" : "monster";
+            const trail = createMarker(
+              `entity world-trail ${kind}-trail trail-${direction.name}`,
+              direction.arrow,
+            );
+            trail.dataset.direction = direction.name;
+            cell.append(trail);
+          }
+          if (warp) cell.append(createMarker("entity warp-marker", ""));
+          if (chest) cell.append(createMarker("entity chest-marker", ""));
           if (entity && !identityKnown) {
-            cell.append(createMarker("entity presence-marker", "?"));
+            cell.append(createMarker("entity presence-marker", ""));
           } else if (entity?.kind === "monster") {
-            cell.append(createMarker("entity monster-marker", "M"));
+            cell.append(createMarker("entity monster-marker", ""));
           } else if (entity?.kind === "boss") {
-            cell.append(createMarker("entity boss-marker", "B"));
+            cell.append(createMarker("entity boss-marker", ""));
           } else if (entity?.kind === "adventurer") {
-            cell.append(createMarker("entity adventurer-marker", "A"));
+            cell.append(createMarker("entity adventurer-marker", ""));
           }
         }
         if (current && game.state !== GameState.CLEAR) {
           const playerMarker = createMarker(
-            `player-marker facing-${game.facing}${game.lastEvent.playerMoved ? " walking" : ""}`,
+            `player-marker facing-${game.facing}${animatePlayer ? " walking" : ""}`,
             "",
           );
           cell.append(playerMarker);
@@ -242,8 +394,18 @@ export class Renderer {
 
   renderMessage(game) {
     const copy = getEventCopy(game.lastEvent);
-    this.eventMessage.textContent = copy.text;
-    this.messagePanel.dataset.tone = copy.tone;
+    const importantWorldEvents = getWorldEvents(game.lastEvent).filter(
+      (event) => event.type !== "rivalMove" && event.type !== "monsterMove",
+    );
+    const additions = importantWorldEvents.map((event) => getEventCopy(event));
+    this.eventMessage.textContent = [
+      copy.text,
+      ...additions.map((item) => item.text),
+    ].filter(Boolean).join(" ／ ");
+    this.messagePanel.dataset.tone =
+      additions.find((item) => item.tone === "danger")?.tone ??
+      additions.find((item) => item.tone === "attention")?.tone ??
+      copy.tone;
   }
 
   renderPanels(game, stageIndex, targeting) {
@@ -258,7 +420,9 @@ export class Renderer {
     this.resultPanel.hidden = !game.isFinished;
     if (game.isFinished) {
       const clear = game.state === GameState.CLEAR;
-      this.resultKicker.textContent = clear ? "DUNGEON COMPLETE" : "EXPEDITION FAILED";
+      this.resultKicker.textContent = clear
+        ? "DUNGEON COMPLETE"
+        : "EXPEDITION FAILED";
       this.resultTitle.textContent = clear ? "BOSS DEFEATED" : "YOU FELL";
       this.resultHp.textContent = String(game.hp);
       this.resultMoves.textContent = String(game.moveCount);
@@ -273,8 +437,14 @@ export class Renderer {
 
   animate(event) {
     if (
-      ["wall", "fistMonster", "fistAdventurer", "bossRepels", "monsterHitPlayer", "gameOver"]
-        .includes(event.type)
+      [
+        "wall",
+        "fistMonster",
+        "fistAdventurer",
+        "bossRepels",
+        "monsterHitPlayer",
+        "gameOver",
+      ].includes(event.type)
     ) {
       this.boardFrame.classList.remove("hit");
       void this.boardFrame.offsetWidth;

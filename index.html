@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#071310" />
+    <meta name="theme-color" content="#061522" />
     <meta
       name="description"
       content="冒険者と宝を競い、追跡するモンスターを囮へ誘導するスマートフォン向け戦術迷宮ゲーム。"
@@ -22,8 +22,8 @@
   <body>
     <main class="game-shell">
       <header class="masthead">
-        <div>
-          <p class="eyebrow">RIVAL EXPEDITION // PROTOTYPE 03</p>
+        <div class="brand">
+          <p class="eyebrow">RIVAL EXPEDITION</p>
           <h1>HIDDEN MAZE</h1>
           <p class="stage-name" id="stage-name">石壁の入口</p>
         </div>
@@ -35,47 +35,57 @@
       </header>
 
       <nav class="stage-tabs" aria-label="ステージ選択">
-        <button data-stage-index="0" class="active">5×5</button>
-        <button data-stage-index="1">6×6</button>
-        <button data-stage-index="2">7×7</button>
-        <button data-stage-index="3">8×8</button>
+        <button data-stage-index="0" class="active"><strong>5×5</strong><small>入口</small></button>
+        <button data-stage-index="1"><strong>6×6</strong><small>回廊</small></button>
+        <button data-stage-index="2"><strong>7×7</strong><small>迷宮</small></button>
+        <button data-stage-index="3"><strong>8×8</strong><small>深層</small></button>
       </nav>
 
-      <section class="mission">
-        <span class="mission-mark" aria-hidden="true"></span>
-        <p>宝を競え。冒険者を囮にし、銀の剣でボスへ隣接攻撃せよ。</p>
-      </section>
-
-      <section class="die-strip" aria-label="開始ダイス">
-        <span>START DIE</span>
-        <strong id="die-value">1</strong>
-        <p id="die-effect">深い闇：松明を1つ失った</p>
-        <button id="start-button" class="start-button">結果を確認して探索開始</button>
+      <section class="die-strip awaiting-start" aria-label="開始ダイス">
+        <div class="die-face" id="die-value" aria-label="出目">1</div>
+        <div class="die-copy">
+          <span>今回の運命</span>
+          <strong id="die-effect">深い闇：松明を1つ失った</strong>
+        </div>
+        <button id="start-button" class="start-button">
+          <span>ダイス効果を受けて探索開始</span>
+          <small>出目を確認したらタップ</small>
+        </button>
       </section>
 
       <section class="status-grid" aria-label="ゲーム状態">
         <article class="status-card hp-card">
-          <span class="status-label">HP</span>
+          <span class="status-label">生命力</span>
           <strong id="hp-value">5 / 5</strong>
           <span class="hearts" id="hp-hearts" aria-hidden="true">♥♥♥♥♥</span>
         </article>
         <article class="status-card weapon-card">
-          <span class="status-label">WEAPON</span>
+          <span class="status-label">装備</span>
           <strong id="weapon-name">素手</strong>
           <span id="weapon-uses">武器を探せ</span>
         </article>
         <article class="status-card map-card">
-          <span class="status-label">MAP / RIVAL</span>
+          <span class="status-label">探索 / 競争者</span>
           <strong id="map-value">0%</strong>
           <span id="rival-status">冒険者の宝 0</span>
         </article>
       </section>
 
-      <section class="board-section" aria-label="迷宮盤面">
-        <div class="board-frame" id="board-frame">
-          <div id="maze-grid" class="maze-grid" role="grid" aria-label="自動生成された暗闇の迷宮"></div>
-          <div class="board-noise" aria-hidden="true"></div>
+      <section class="objective-strip" aria-label="現在の目標">
+        <span class="objective-icon" aria-hidden="true"></span>
+        <div>
+          <small>対ボス武器</small>
+          <strong id="boss-weapon-status">未発見 — 宝箱を探せ</strong>
         </div>
+        <span class="turn-count" id="turn-count">TURN 0</span>
+      </section>
+
+      <section class="board-section" aria-label="迷宮盤面">
+        <div class="board-frame waiting" id="board-frame">
+          <div id="maze-grid" class="maze-grid" role="grid" aria-label="自動生成された暗闇の迷宮"></div>
+          <div class="board-vignette" aria-hidden="true"></div>
+        </div>
+        <p class="tap-hint"><span aria-hidden="true">TAP</span> 光る隣マスへ移動・気配は二度押しで接触</p>
         <div class="legend" aria-label="盤面の凡例">
           <span><i class="legend-chip presence-chip"></i>気配</span>
           <span><i class="legend-chip rival-chip"></i>冒険者</span>
@@ -88,34 +98,39 @@
       <section id="message-panel" class="message-panel" aria-live="polite" aria-atomic="true">
         <span class="message-pulse" aria-hidden="true"></span>
         <div class="message-copy">
+          <small>EVENT LOG</small>
           <p id="event-message">ダイス結果を確認してから探索を開始。</p>
-          <small>行動順：自分 → 冒険者 → モンスター</small>
         </div>
       </section>
 
       <section class="action-bar" aria-label="装備と探索道具">
         <button id="attack-button" class="action-button attack-action" disabled>
-          <strong>ATTACK</strong>
-          <small id="attack-caption">射程内に対象なし</small>
+          <span class="action-icon attack-icon" aria-hidden="true"></span>
+          <span class="action-copy"><strong>攻撃</strong><small id="attack-caption">射程内に対象なし</small></span>
         </button>
         <button id="torch-button" class="action-button">
-          <strong>松明</strong>
-          <small>周囲3×3・残り <span id="torch-count">1</span></small>
+          <span class="action-icon torch-icon" aria-hidden="true"></span>
+          <span class="action-copy"><strong>松明</strong><small>3×3・残 <b id="torch-count">1</b></small></span>
         </button>
         <button id="light-button" class="action-button">
-          <strong>光魔法</strong>
-          <small>周囲5×5・残り <span id="light-count">0</span></small>
+          <span class="action-icon light-icon" aria-hidden="true"></span>
+          <span class="action-copy"><strong>光魔法</strong><small>5×5・残 <b id="light-count">0</b></small></span>
         </button>
       </section>
 
-      <section class="controls" aria-label="移動操作">
-        <button class="move-button move-up" data-direction="up" aria-label="上へ移動"><span>▲</span><small>UP</small></button>
-        <button class="move-button move-left" data-direction="left" aria-label="左へ移動"><span>◀</span><small>LEFT</small></button>
-        <button class="move-button move-down" data-direction="down" aria-label="下へ移動"><span>▼</span><small>DOWN</small></button>
-        <button class="move-button move-right" data-direction="right" aria-label="右へ移動"><span>▶</span><small>RIGHT</small></button>
+      <section class="controls" aria-label="方向ボタン">
+        <p>予備操作：方向キーでも移動</p>
+        <div class="dpad">
+          <button class="move-button move-up" data-direction="up" aria-label="上へ移動">▲</button>
+          <button class="move-button move-left" data-direction="left" aria-label="左へ移動">◀</button>
+          <span class="dpad-core" aria-hidden="true"></span>
+          <button class="move-button move-right" data-direction="right" aria-label="右へ移動">▶</button>
+          <button class="move-button move-down" data-direction="down" aria-label="下へ移動">▼</button>
+        </div>
       </section>
 
       <section id="chest-panel" class="decision-panel" hidden>
+        <div class="panel-grab" aria-hidden="true"></div>
         <p class="panel-kicker">TREASURE FOUND</p>
         <h2>宝箱を見つけた</h2>
         <p>中身は開けるまで分からない。放置すれば冒険者に奪われる。</p>
@@ -126,6 +141,7 @@
       </section>
 
       <section id="result-panel" class="result-panel" hidden>
+        <div class="panel-grab" aria-hidden="true"></div>
         <p class="panel-kicker" id="result-kicker">DUNGEON COMPLETE</p>
         <h2 id="result-title">BOSS DEFEATED</h2>
         <div class="result-stats">
@@ -139,9 +155,8 @@
       </section>
 
       <footer class="utility-bar">
-        <button id="restart-button" class="utility-button">↻ 同じ迷宮をやり直す</button>
+        <button id="restart-button" class="utility-button">↻ 同じ迷宮</button>
         <button id="new-maze-button" class="utility-button">✦ 別の迷宮を生成</button>
-        <p>ARROWS / WASD · F: ATTACK · T: TORCH · L: LIGHT</p>
       </footer>
     </main>
     <script type="module" src="./js/main.js"></script>
